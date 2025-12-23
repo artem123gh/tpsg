@@ -53,3 +53,19 @@ GKVSInstance.Delete(key string)
 3. General config should be represented in `config.toml` which is located in external folder path of which is constructed during app run. It contains some settings like for example `TCP` - TCP listening port for server and `WS` - websocket listening port for server. More setting can be added later. 
 4. In `tpsg/config.go` should be implemented function `ReadConfig` which takes TOML config full path. It should read TOML config, parse it and map to type `TConfigTOML`. For parsing TOML package `github.com/BurntSushi/toml` should be used. Obtained `TConfigTOML` value should be returned as result value.
 5. In `tpsg/main.go` in `func main` should be sequence to reaf TOML confir and to store it in `TConfig` GKVS.
+6. Users config is stored in according to `users_config_fullpath`.
+7. User config is JSON file like this.
+```
+{
+    "username1": {
+        "password": "password1"
+    },
+    "username2": {
+        "password": "password2"
+    },
+    "username3": {
+        "password": "password3"
+    }
+}
+```
+8. In `tpsg/config.go` should be implemented function `ReadUsersConfig` which tales users config full path. It should read `users.json`, parse it and map it to `TUserCreds` type and each user creds object should be stored to the `TUsers` GKVS instance under the key which corresponds to unsername.

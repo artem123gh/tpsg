@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TPSG is a Go-based application currently in early development. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, and global storage management. The application uses TOML for external configuration and provides a thread-safe global key-value storage system for runtime data.
+TPSG is a Go-based application currently in early development. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, and global storage management. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
 
 ## Project Structure
 
@@ -28,6 +28,13 @@ tpsg/
 ├── run_console_debug.sh         # Run debug binary
 └── run_console_release.sh       # Run release binary
 ```
+
+## External Configuration Files
+
+The application uses external configuration files stored in `~/tpsg_configs/`:
+
+- **config.toml** - Application settings (TCP and WS ports)
+- **users.json** - User credentials (username/password pairs)
 
 ## Implemented Components
 
@@ -60,6 +67,8 @@ type TUserCreds struct {
 }
 ```
 
+Represents user credentials with both username and password fields.
+
 **TConfigTOML Type:**
 ```go
 type TConfigTOML struct {
@@ -84,7 +93,7 @@ Supported types:
 - TConfigTOML
 - None (empty value)
 
-Helper constructors: `NewGKVSString(value)`, `NewGKVSInt32(value)`, `NewGKVSTConfigTOML(value)`, `NewGKVSNone()`, etc.
+Helper constructors: `NewGKVSString(value)`, `NewGKVSInt32(value)`, `NewGKVSTConfigTOML(value)`, `NewGKVSTUserCreds(value)`, `NewGKVSNone()`, etc.
 
 **Key Design Decision:** Uses direct values instead of pointers to avoid `&` and `*` operations in user code.
 
@@ -111,14 +120,16 @@ type GKVS struct {
 - Each instance has its own mutex for independent operation
 - Deadlock prevention: single lock acquisition per method, deferred unlocks
 
-**Global Instance:**
+**Global Instances:**
 - `TConfig *GKVS` - Global configuration storage, accessible throughout the application
+- `TUsers *GKVS` - Global user credentials storage, accessible throughout the application
 
 **Usage Example:**
 ```go
 TConfig.Set("key", NewGKVSString("value"))
 result := TConfig.Get("key").String  // Direct field access, no dereferencing
 config := TConfig.Get("config").TConfigTOML  // Retrieve config object
+userCreds := TUsers.Get("username1").TUserCreds  // Retrieve user credentials
 ```
 
 ### 4. Configuration Management (tpsg/config.go)
@@ -132,6 +143,7 @@ const USERS_CONFIG_FILE = "users.json"
 
 **Global Storage:**
 - `TConfig *GKVS` - Global GKVS instance for application-wide configuration
+- `TUsers *GKVS` - Global GKVS instance for user credentials storage
 
 **ReadConfig Function:**
 ```go
@@ -153,9 +165,39 @@ TCP = 8080
 WS = 8081
 ```
 
+**ReadUsersConfig Function:**
+```go
+func ReadUsersConfig(usersConfigPath string) error
+```
+
+Reads and parses the JSON user credentials file:
+- Takes full path to users.json file
+- Reads file contents using `os.ReadFile`
+- Parses JSON using `encoding/json` package
+- Creates `TUserCreds` objects for each user
+- Stores each user in the global `TUsers` GKVS instance with username as key
+- Returns error if reading or parsing fails
+
+**Users Configuration File Structure:**
+
+The external `users.json` file (located in `~/tpsg_configs/users.json`) contains:
+```json
+{
+    "username1": {
+        "password": "password1"
+    },
+    "username2": {
+        "password": "password2"
+    },
+    "username3": {
+        "password": "password3"
+    }
+}
+```
+
 ### 5. Main Application (tpsg/main.go)
 
-The application demonstrates the complete configuration and storage workflow:
+The application demonstrates the complete configuration and user loading workflow:
 
 **Initialization Sequence:**
 1. Constructs configuration paths from HOME environment variable
@@ -171,14 +213,21 @@ The application demonstrates the complete configuration and storage workflow:
 5. On success, stores parsed config in TConfig under key "config"
 6. Logs success event with `LogEvent`
 
+**User Credentials Loading:**
+7. Calls `ReadUsersConfig(users_config_fullpath)` to read and parse users.json
+8. Handles errors by logging with `LogError`
+9. On success, each user is stored in TUsers GKVS with username as key
+10. Logs success event with `LogEvent`
+
 **Demonstration of GKVS Retrieval:**
-7. Retrieves all stored paths from TConfig
-8. Logs path values using `LogInfo`
-9. Retrieves the config object from TConfig
-10. Logs TCP and WS port values from the retrieved config
+11. Retrieves all stored paths from TConfig
+12. Logs path values using `LogInfo`
+13. Retrieves the config object from TConfig
+14. Logs TCP and WS port values from the retrieved config
 
 This workflow demonstrates:
 - Reading external TOML configuration
+- Reading external JSON user credentials
 - Storing structured data in GKVS
 - Retrieving and using stored configuration values
 
@@ -199,8 +248,8 @@ External packages used:
 2. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
 3. **Separation of Concerns**: Distinct files for logging, types, storage, and configuration
 4. **Standardized Logging**: Consistent timestamp format across all log functions
-5. **Global Accessibility**: TConfig is globally available for application-wide configuration
-6. **External Configuration**: TOML-based config files for runtime settings
+5. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
+6. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
 7. **Error Handling**: Functions return errors for caller to handle appropriately
 
 ## Current Status
@@ -210,8 +259,10 @@ The project has foundational infrastructure in place:
 - ✅ Type definitions and tagged union system
 - ✅ Thread-safe global key-value storage
 - ✅ TOML configuration reading and parsing
+- ✅ JSON user credentials reading and parsing
 - ✅ Configuration storage in global GKVS
+- ✅ User credentials storage in global GKVS
 - ✅ Build and run scripts
 - ✅ Path management for external config files
 
-The application currently demonstrates the complete configuration workflow: constructing paths, reading external TOML config, storing configuration in the global GKVS, and retrieving values for use throughout the application.
+The application currently demonstrates the complete initialization workflow: constructing paths, reading external TOML config, reading external JSON user credentials, storing both configuration and users in global GKVS instances, and retrieving values for use throughout the application.

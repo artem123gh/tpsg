@@ -24,6 +24,13 @@ func main() {
 		LogEvent(fmt.Sprintf("Config loaded."))
 	}
 
+	err = ReadUsersConfig(users_config_fullpath)
+	if err != nil {
+		LogError(fmt.Sprintf("Failed to read users config: %s", err.Error()))
+	} else {
+		LogEvent(fmt.Sprintf("Users config loaded."))
+	}
+
 	user_folder_r := TConfig.Get("user_folder").String
 	configs_folder_path_r := TConfig.Get("configs_folder_path").String
 	config_fullpath_r := TConfig.Get("config_fullpath").String
