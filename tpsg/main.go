@@ -16,6 +16,14 @@ func main() {
 	TConfig.Set("config_fullpath", NewGKVSString(config_fullpath))
 	TConfig.Set("users_config_fullpath", NewGKVSString(users_config_fullpath))
 
+	config, err := ReadConfig(config_fullpath)
+	if err != nil {
+		LogError(fmt.Sprintf("Failed to read config: %s", err.Error()))
+	} else {
+		TConfig.Set("config", NewGKVSTConfigTOML(config))
+		LogEvent(fmt.Sprintf("Config loaded."))
+	}
+
 	user_folder_r := TConfig.Get("user_folder").String
 	configs_folder_path_r := TConfig.Get("configs_folder_path").String
 	config_fullpath_r := TConfig.Get("config_fullpath").String
@@ -25,4 +33,8 @@ func main() {
 	LogInfo(fmt.Sprintf("configs_folder_path: %s", configs_folder_path_r))
 	LogInfo(fmt.Sprintf("config_fullpath: %s", config_fullpath_r))
 	LogInfo(fmt.Sprintf("users_config_fullpath: %s", users_config_fullpath_r))
+
+	config_r := TConfig.Get("config").TConfigTOML
+	LogInfo(fmt.Sprintf("Config TCP: %d", config_r.TCP))
+	LogInfo(fmt.Sprintf("Config WS: %d", config_r.WS))
 }

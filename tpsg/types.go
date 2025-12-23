@@ -13,6 +13,12 @@ type TUserCreds struct {
 	Password string
 }
 
+// Type for TOML config.
+type TConfigTOML struct {
+	TCP uint16 `toml:"TCP"`
+	WS  uint16 `toml:"WS"`
+}
+
 type GKVSValueType int
 
 const (
@@ -29,23 +35,25 @@ const (
 	GKVSTypeFloat64
 	GKVSTypeString
 	GKVSTypeTUserCreds
+	GKVSTypeTConfigTOML
 )
 
 // GKVSTypes is an enum-like type for supported value types for global key-value storage - GKVS.
 type GKVSTypes struct {
-	Type       GKVSValueType
-	Int8       int8
-	UInt8      uint8
-	Int16      int16
-	UInt16     uint16
-	Int32      int32
-	UInt32     uint32
-	Int64      int64
-	UInt64     uint64
-	Float32    float32
-	Float64    float64
-	String     string
-	TUserCreds TUserCreds
+	Type        GKVSValueType
+	Int8        int8
+	UInt8       uint8
+	Int16       int16
+	UInt16      uint16
+	Int32       int32
+	UInt32      uint32
+	Int64       int64
+	UInt64      uint64
+	Float32     float32
+	Float64     float64
+	String      string
+	TUserCreds  TUserCreds
+	TConfigTOML TConfigTOML
 }
 
 func NewGKVSNone() GKVSTypes {
@@ -98,4 +106,8 @@ func NewGKVSString(value string) GKVSTypes {
 
 func NewGKVSTUserCreds(value TUserCreds) GKVSTypes {
 	return GKVSTypes{Type: GKVSTypeTUserCreds, TUserCreds: value}
+}
+
+func NewGKVSTConfigTOML(value TConfigTOML) GKVSTypes {
+	return GKVSTypes{Type: GKVSTypeTConfigTOML, TConfigTOML: value}
 }

@@ -40,5 +40,3 @@ func (g *GKVS) Delete(key string) GKVSTypes {
 	delete(g.storage, key)
 	return value
 }
-
-var TConfig *GKVS = NewGKVS()

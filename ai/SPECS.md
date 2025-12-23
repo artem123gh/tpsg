@@ -50,3 +50,6 @@ GKVSInstance.Delete(key string)
 
 1. Configs functionality should be implemented in file `tpsg/config.go`.
 2. This file also can contain some hard coded constands.
+3. General config should be represented in `config.toml` which is located in external folder path of which is constructed during app run. It contains some settings like for example `TCP` - TCP listening port for server and `WS` - websocket listening port for server. More setting can be added later. 
+4. In `tpsg/config.go` should be implemented function `ReadConfig` which takes TOML config full path. It should read TOML config, parse it and map to type `TConfigTOML`. For parsing TOML package `github.com/BurntSushi/toml` should be used. Obtained `TConfigTOML` value should be returned as result value.
+5. In `tpsg/main.go` in `func main` should be sequence to reaf TOML confir and to store it in `TConfig` GKVS.
