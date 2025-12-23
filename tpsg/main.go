@@ -6,6 +6,12 @@ import (
 )
 
 func main() {
+	// Check for test mode
+	if len(os.Args) > 1 && os.Args[1] == "test-gkvs" {
+		TestGKVS()
+		return
+	}
+
 	var user_folder string = os.Getenv("HOME")
 	var configs_folder_path string = fmt.Sprintf("%s/%s", user_folder, CONFIGS_FOLDER)
 	var config_fullpath string = fmt.Sprintf("%s/%s", configs_folder_path, CONFIG_FILE)

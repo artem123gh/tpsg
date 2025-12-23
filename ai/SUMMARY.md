@@ -18,16 +18,18 @@ tpsg/
 ├── tpsg/                        # Go module source code
 │   ├── go.mod                   # Go module file (module: tpsg, Go 1.24.1)
 │   ├── go.sum                   # Go dependencies checksums
-│   ├── main.go                  # Application entry point
+│   ├── main.go                  # Application entry point with test mode support
 │   ├── logging.go               # Logging functionality
 │   ├── types.go                 # Type definitions
 │   ├── gkvs.go                  # Global Key-Value Storage implementation
 │   ├── config.go                # Configuration management and constants
-│   └── server_tcp.go            # TCP server implementation
+│   ├── server_tcp.go            # TCP server implementation
+│   └── test_gkvs.go             # GKVS concurrent access test
 ├── build_debug.sh               # Build debug binary
 ├── build_release.sh             # Build release binary (optimized with -ldflags="-s -w")
 ├── run_console_debug.sh         # Run debug binary
-└── run_console_release.sh       # Run release binary
+├── run_console_release.sh       # Run release binary
+└── run_test_gkvs.sh             # Run GKVS test
 ```
 
 ## External Configuration Files
@@ -246,9 +248,14 @@ Placeholder request processor (currently implements echo server):
 
 ### 6. Main Application (tpsg/main.go)
 
-The application demonstrates the complete initialization and server startup workflow:
+The application entry point supports two modes: normal server mode and test mode.
 
-**Initialization Sequence:**
+**Test Mode:**
+- Activated by passing `test-gkvs` as the first command-line argument
+- Calls `TestGKVS()` function and exits without loading configuration or starting the server
+- Allows testing specific features independently of the full application
+
+**Normal Server Mode - Initialization Sequence:**
 1. Constructs configuration paths from HOME environment variable
 2. Stores all paths in global `TConfig` GKVS instance:
    - `user_folder` - User's home directory
@@ -287,11 +294,43 @@ This workflow demonstrates:
 - Starting the TCP server with configured port
 - Running the server indefinitely
 
+### 7. Testing System (tpsg/test_gkvs.go)
+
+The project includes a testing framework for isolated feature testing without running the full server.
+
+**TestGKVS Function:**
+```go
+func TestGKVS()
+```
+
+Demonstrates and tests concurrent access to the GKVS system:
+- Spawns 3 goroutines that interact with `TConfig` at different times
+- **Goroutine 1**: Immediately sets `test1 = 1` (uint16)
+- **Goroutine 2**: Waits 5 seconds, retrieves and prints `test1`, then sets `test1 = 2`
+- **Goroutine 3**: Waits 10 seconds, retrieves and prints `test1`
+- Demonstrates thread-safe concurrent read/write operations
+- Validates mutex-based synchronization prevents race conditions
+- Uses direct field access pattern: `TConfig.Get("test1").UInt16`
+- Runs for ~12 seconds to allow all goroutines to complete
+
+**Test Execution:**
+- Tests are invoked via command-line argument to `main()`
+- Run with: `./run_test_gkvs.sh` or `go run . test-gkvs` (from tpsg/ directory)
+- Test mode bypasses configuration loading and server startup
+- Additional test functions can be added and invoked with different arguments
+
+**Design Pattern:**
+- All source files use `package main` (not an importable library)
+- Test functions are part of the main package
+- Command-line arguments switch between server mode and test mode
+- Allows testing specific features in isolation without external dependencies
+
 ## Build System
 
 - **Debug build**: Standard Go build without optimizations
 - **Release build**: Optimized with stripped symbols (`-ldflags="-s -w"`)
-- All build scripts are executable bash scripts in project root
+- All build and run scripts are executable bash scripts in project root
+- **Test script**: `run_test_gkvs.sh` - Runs GKVS concurrent access test
 
 ## Dependencies
 
@@ -302,13 +341,14 @@ External packages used:
 
 1. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
 2. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
-3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, and server functionality
+3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, server, and testing functionality
 4. **Standardized Logging**: Consistent timestamp format across all log functions
 5. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
 6. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
 7. **Error Handling**: Functions return errors for caller to handle appropriately
 8. **Concurrent Connection Handling**: Each TCP connection runs in its own goroutine
 9. **Non-blocking Server**: TCP server runs in background goroutine
+10. **Testability**: Command-line argument-based test mode for isolated feature testing without dependencies
 
 ## Current Status
 
@@ -324,6 +364,8 @@ The project has foundational infrastructure in place:
 - ✅ Path management for external config files
 - ✅ TCP server with concurrent connection handling
 - ✅ Request/response protocol (currently echo placeholder)
+- ✅ Testing framework with command-line test mode
+- ✅ GKVS concurrent access test
 
 The application is functional and can:
 - Load configuration from external TOML file
@@ -333,6 +375,7 @@ The application is functional and can:
 - Process requests and send responses (currently echo mode)
 - Log all events and errors with timestamps
 - Run indefinitely serving TCP clients
+- Run isolated feature tests via command-line arguments
 
 **Next development steps** (as indicated in SPECS.md):
 - Replace `ProcessTCPRequest` placeholder with actual protocol implementation
