@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TPSG is a Go-based application currently in early development. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, and global storage management. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
+TPSG is a Go-based application that provides TCP server functionality with user authentication and configuration management. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, global storage management, and network communication. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
 
 ## Project Structure
 
@@ -22,7 +22,8 @@ tpsg/
 │   ├── logging.go               # Logging functionality
 │   ├── types.go                 # Type definitions
 │   ├── gkvs.go                  # Global Key-Value Storage implementation
-│   └── config.go                # Configuration management and constants
+│   ├── config.go                # Configuration management and constants
+│   └── server_tcp.go            # TCP server implementation
 ├── build_debug.sh               # Build debug binary
 ├── build_release.sh             # Build release binary (optimized with -ldflags="-s -w")
 ├── run_console_debug.sh         # Run debug binary
@@ -195,9 +196,57 @@ The external `users.json` file (located in `~/tpsg_configs/users.json`) contains
 }
 ```
 
-### 5. Main Application (tpsg/main.go)
+### 5. TCP Server (tpsg/server_tcp.go)
 
-The application demonstrates the complete configuration and user loading workflow:
+The TCP server provides network communication functionality with concurrent connection handling.
+
+**RunTCPServer Function:**
+```go
+func RunTCPServer(port uint16)
+```
+
+Starts the TCP server in a background goroutine:
+- Creates TCP listener on specified port
+- Accepts incoming connections in a loop
+- Spawns a new goroutine for each connection using `HandleTCPConnection`
+- Logs server startup, connection acceptance, and errors
+- Non-blocking - runs in background goroutine
+
+**HandleTCPConnection Function:**
+```go
+func HandleTCPConnection(conn net.Conn)
+```
+
+Processes individual TCP connections:
+- Runs in its own goroutine for each client
+- Uses `bufio.Reader` to read requests line by line (newline-terminated)
+- Processes requests synchronously within the connection
+- Calls `ProcessTCPRequest` for each received request
+- Sends responses back to the client
+- Handles connection closure and errors gracefully
+- Logs connection events and errors
+
+**ProcessTCPRequest Function:**
+```go
+func ProcessTCPRequest(request string) string
+```
+
+Placeholder request processor (currently implements echo server):
+- Receives request as string
+- Logs the received request
+- Returns echo response in format: `"Echo: <request>"`
+- Will be replaced with actual protocol implementation later
+
+**Connection Protocol:**
+- Requests are newline-terminated text strings
+- Each request is processed synchronously
+- Response is sent immediately after processing
+- Connection remains open for multiple requests
+- Connection closes on client disconnect or error
+
+### 6. Main Application (tpsg/main.go)
+
+The application demonstrates the complete initialization and server startup workflow:
 
 **Initialization Sequence:**
 1. Constructs configuration paths from HOME environment variable
@@ -225,11 +274,18 @@ The application demonstrates the complete configuration and user loading workflo
 13. Retrieves the config object from TConfig
 14. Logs TCP and WS port values from the retrieved config
 
+**TCP Server Startup:**
+15. Retrieves the config from TConfig
+16. Calls `RunTCPServer(config_r.TCP)` with the TCP port from configuration
+17. Uses `select {}` to keep the program running indefinitely
+
 This workflow demonstrates:
 - Reading external TOML configuration
 - Reading external JSON user credentials
 - Storing structured data in GKVS
 - Retrieving and using stored configuration values
+- Starting the TCP server with configured port
+- Running the server indefinitely
 
 ## Build System
 
@@ -246,11 +302,13 @@ External packages used:
 
 1. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
 2. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
-3. **Separation of Concerns**: Distinct files for logging, types, storage, and configuration
+3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, and server functionality
 4. **Standardized Logging**: Consistent timestamp format across all log functions
 5. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
 6. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
 7. **Error Handling**: Functions return errors for caller to handle appropriately
+8. **Concurrent Connection Handling**: Each TCP connection runs in its own goroutine
+9. **Non-blocking Server**: TCP server runs in background goroutine
 
 ## Current Status
 
@@ -264,5 +322,19 @@ The project has foundational infrastructure in place:
 - ✅ User credentials storage in global GKVS
 - ✅ Build and run scripts
 - ✅ Path management for external config files
+- ✅ TCP server with concurrent connection handling
+- ✅ Request/response protocol (currently echo placeholder)
 
-The application currently demonstrates the complete initialization workflow: constructing paths, reading external TOML config, reading external JSON user credentials, storing both configuration and users in global GKVS instances, and retrieving values for use throughout the application.
+The application is functional and can:
+- Load configuration from external TOML file
+- Load user credentials from external JSON file
+- Start a TCP server on the configured port
+- Accept multiple concurrent TCP connections
+- Process requests and send responses (currently echo mode)
+- Log all events and errors with timestamps
+- Run indefinitely serving TCP clients
+
+**Next development steps** (as indicated in SPECS.md):
+- Replace `ProcessTCPRequest` placeholder with actual protocol implementation
+- Implement WebSocket server functionality
+- Define and implement request/response protocol specifications

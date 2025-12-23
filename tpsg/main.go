@@ -44,4 +44,10 @@ func main() {
 	config_r := TConfig.Get("config").TConfigTOML
 	LogInfo(fmt.Sprintf("Config TCP: %d", config_r.TCP))
 	LogInfo(fmt.Sprintf("Config WS: %d", config_r.WS))
+
+	// Run TCP server
+	RunTCPServer(config_r.TCP)
+
+	// Keep the program running
+	select {}
 }
