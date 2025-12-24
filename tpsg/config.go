@@ -11,9 +11,6 @@ const CONFIGS_FOLDER string = "tpsg_configs"
 const CONFIG_FILE string = "config.toml"
 const USERS_CONFIG_FILE string = "users.json"
 
-var TConfig *GKVS = NewGKVS()
-var TUsers *GKVS = NewGKVS()
-
 func ReadConfig(configPath string) (TConfigTOML, error) {
 	var config TConfigTOML
 

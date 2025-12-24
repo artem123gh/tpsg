@@ -24,6 +24,7 @@ tpsg/ (repository root)
 │   ├── logging.go               # Logging functionality (package tpsg)
 │   ├── types.go                 # Type definitions (package tpsg)
 │   ├── gkvs.go                  # Global Key-Value Storage (package tpsg)
+│   ├── gkvs_is.go               # GKVS global instances (package tpsg)
 │   ├── gkvs_test.go             # GKVS unit tests (package tpsg)
 │   ├── config.go                # Configuration management (package tpsg)
 │   ├── server_tcp.go            # TCP server implementation (package tpsg)
@@ -132,10 +133,6 @@ type GKVS struct {
 - Each instance has its own mutex for independent operation
 - Deadlock prevention: single lock acquisition per method, deferred unlocks
 
-**Global Instances:**
-- `TConfig *GKVS` - Global configuration storage, accessible throughout the application
-- `TUsers *GKVS` - Global user credentials storage, accessible throughout the application
-
 **Usage Example:**
 ```go
 // From library code (package tpsg)
@@ -147,7 +144,33 @@ tpsg.TConfig.Set("key", tpsg.NewGKVSString("value"))
 result := tpsg.TConfig.Get("key").String
 ```
 
-### 4. Configuration Management (tpsg/config.go)
+### 4. GKVS Global Instances (tpsg/gkvs_is.go)
+
+A dedicated file for creating and exporting global GKVS instances used throughout the application.
+
+**Global Instances:**
+```go
+var TConfig *GKVS = NewGKVS()
+var TUsers *GKVS = NewGKVS()
+```
+
+- **TConfig** - Global configuration storage, accessible throughout the application
+  - Stores runtime configuration including file paths
+  - Stores parsed TOML configuration under key "config"
+  - Used by main.go and can be accessed from any package importing tpsg
+
+- **TUsers** - Global user credentials storage, accessible throughout the application
+  - Stores user credentials with username as key
+  - Populated by `ReadUsersConfig()` function from config.go
+  - Used for authentication and user management
+
+**Design Rationale:**
+- Separates global instance declarations from GKVS implementation (gkvs.go)
+- Provides clean separation of concerns
+- Makes global instances easily discoverable in dedicated file
+- Allows GKVS implementation to remain focused on the data structure itself
+
+### 5. Configuration Management (tpsg/config.go)
 
 **Hard-coded Constants:**
 ```go
@@ -155,10 +178,6 @@ const CONFIGS_FOLDER = "tpsg_configs"
 const CONFIG_FILE = "config.toml"
 const USERS_CONFIG_FILE = "users.json"
 ```
-
-**Global Storage:**
-- `TConfig *GKVS` - Global GKVS instance for application-wide configuration
-- `TUsers *GKVS` - Global GKVS instance for user credentials storage
 
 **ReadConfig Function:**
 ```go
@@ -210,7 +229,7 @@ The external `users.json` file (located in `~/tpsg_configs/users.json`) contains
 }
 ```
 
-### 5. TCP Server (tpsg/server_tcp.go)
+### 6. TCP Server (tpsg/server_tcp.go)
 
 The TCP server provides network communication functionality with concurrent connection handling.
 
@@ -258,7 +277,7 @@ Placeholder request processor (currently implements echo server):
 - Connection remains open for multiple requests
 - Connection closes on client disconnect or error
 
-### 6. WebSocket Server (tpsg/server_ws.go)
+### 7. WebSocket Server (tpsg/server_ws.go)
 
 The WebSocket server provides bidirectional real-time communication functionality with concurrent connection handling and asynchronous request processing.
 
@@ -315,7 +334,7 @@ Placeholder request processor (currently implements echo server):
 - TCP: Requests processed synchronously within each connection
 - WebSocket: Requests processed asynchronously (each in separate goroutine)
 
-### 7. Main Application (tpsg/cmd/tpsg/main.go)
+### 8. Main Application (tpsg/cmd/tpsg/main.go)
 
 The application entry point in `package main` that imports and uses the `tpsg` package.
 
@@ -366,7 +385,7 @@ This workflow demonstrates:
 - Starting both TCP and WebSocket servers with configured ports
 - Running the servers indefinitely
 
-### 8. Testing System (tpsg/gkvs_test.go)
+### 9. Testing System (tpsg/gkvs_test.go)
 
 The project uses Go's standard testing framework with comprehensive unit tests.
 
@@ -430,7 +449,7 @@ External packages used:
 3. **Testability**: Standard Go testing with `go test` support, comprehensive unit tests
 4. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
 5. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
-6. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, and servers
+6. **Separation of Concerns**: Distinct files for logging, types, storage, global instances, configuration, and servers
 7. **Standardized Logging**: Consistent timestamp format across all log functions
 8. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
 9. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
@@ -446,6 +465,7 @@ The project has foundational infrastructure in place following Go best practices
 - ✅ Logging system (package tpsg)
 - ✅ Type definitions and tagged union system (package tpsg)
 - ✅ Thread-safe global key-value storage (package tpsg)
+- ✅ Global GKVS instances in dedicated file (package tpsg)
 - ✅ TOML configuration reading and parsing (package tpsg)
 - ✅ JSON user credentials reading and parsing (package tpsg)
 - ✅ Configuration storage in global GKVS
