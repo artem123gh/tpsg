@@ -13,6 +13,9 @@ other/*
 *.so
 *.dylib
 
+# Go build binary in tpsg folder (created when running go build without -o flag)
+tpsg/tpsg
+
 # Test binary, built with `go test -c`
 *.test
 
