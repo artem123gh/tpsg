@@ -1,4 +1,4 @@
-package main
+package tpsg
 
 type Status bool
 
