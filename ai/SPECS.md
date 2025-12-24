@@ -76,4 +76,13 @@ GKVSInstance.Delete(key string)
 2. There should be function `RunTCPServer` which takes port argument `unint16`. It should spawn goroutine which whithin which TCP listener will run.
 3. For each TCP connection should be spawned another goroutine with function `HandleTCPConnection`. Within this function requests should be processed synchronously until conncetion is closed.
 4. For each request should be called function `ProcessTCPRequest` which takes request as argument and gives response as result. Then result should be sent back to client. For now you can put placeholder for this function which will decode request as text and then will send back echo response to client.
-5. In `tpsg/main.go` in `func main` in the and of the function TCP server should be run wth port TCP from TConfig.
+5. In `tpsg/main.go` in `func main` in the end of the function TCP server should be run wth port TCP from TConfig.
+
+## Websocket server - WS server.
+
+1. Functionality of websocket server should be implemented in file `tpsg/server_ws.go`.
+2. There should be function `RunWSServer` which takes port argument `unint16`. It should spawn goroutine which whithin which WS listener will run.
+3. For each WS connection should be spawned another goroutine with function `HandleWSConnection`. Within this function requests should be processed asynchronously until conncetion is closed.
+4. For each request should be spawned separate goroutine within which called function `ProcessWSRequest` which takes request as argument and gives response as result. Then result should be sent back to client. For now you can put placeholder for this function which will decode request as text and then will send back echo response to client.
+5. In `tpsg/main.go` in `func main` in the end of the function WS server should be run wth port WS from TConfig.
+ 

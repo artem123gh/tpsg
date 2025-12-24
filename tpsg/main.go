@@ -54,6 +54,9 @@ func main() {
 	// Run TCP server
 	RunTCPServer(config_r.TCP)
 
+	// Run WebSocket server
+	RunWSServer(config_r.WS)
+
 	// Keep the program running
 	select {}
 }

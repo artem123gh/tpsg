@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TPSG is a Go-based application that provides TCP server functionality with user authentication and configuration management. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, global storage management, and network communication. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
+TPSG is a Go-based application that provides TCP and WebSocket server functionality with user authentication and configuration management. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, global storage management, and network communication. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
 
 ## Project Structure
 
@@ -24,6 +24,7 @@ tpsg/
 │   ├── gkvs.go                  # Global Key-Value Storage implementation
 │   ├── config.go                # Configuration management and constants
 │   ├── server_tcp.go            # TCP server implementation
+│   ├── server_ws.go             # WebSocket server implementation
 │   └── test_gkvs.go             # GKVS concurrent access test
 ├── build_debug.sh               # Build debug binary
 ├── build_release.sh             # Build release binary (optimized with -ldflags="-s -w")
@@ -246,7 +247,64 @@ Placeholder request processor (currently implements echo server):
 - Connection remains open for multiple requests
 - Connection closes on client disconnect or error
 
-### 6. Main Application (tpsg/main.go)
+### 6. WebSocket Server (tpsg/server_ws.go)
+
+The WebSocket server provides bidirectional real-time communication functionality with concurrent connection handling and asynchronous request processing.
+
+**RunWSServer Function:**
+```go
+func RunWSServer(port uint16)
+```
+
+Starts the WebSocket server in a background goroutine:
+- Creates TCP listener on specified port (explicit `net.Listen`)
+- Logs server startup after listener is successfully established
+- Sets up HTTP upgrade handler for WebSocket connections
+- Uses `http.Serve` with the established listener
+- Spawns a new goroutine for each WebSocket connection using `HandleWSConnection`
+- Non-blocking - runs in background goroutine
+
+**HandleWSConnection Function:**
+```go
+func HandleWSConnection(conn *websocket.Conn)
+```
+
+Processes individual WebSocket connections:
+- Runs in its own goroutine for each client
+- Reads messages from the WebSocket connection in a loop
+- Processes requests asynchronously - spawns a new goroutine for each incoming message
+- Each goroutine calls `ProcessWSRequest` and sends the response back
+- Handles connection closure and errors gracefully
+- Logs connection events, message reception, and errors
+
+**ProcessWSRequest Function:**
+```go
+func ProcessWSRequest(request string) string
+```
+
+Placeholder request processor (currently implements echo server):
+- Receives request as string
+- Logs the received request
+- Returns echo response in format: `"Echo: <request>"`
+- Will be replaced with actual protocol implementation later
+
+**WebSocket Upgrader:**
+- Uses `github.com/gorilla/websocket` library
+- `CheckOrigin` returns true to accept connections from any origin
+- Can be configured for production security requirements
+
+**Connection Protocol:**
+- Messages can be sent/received at any time (bidirectional)
+- Each message is processed asynchronously in its own goroutine
+- Response is sent after processing completes
+- Connection remains open for multiple messages
+- Connection closes on client disconnect or error
+
+**Key Difference from TCP Server:**
+- TCP: Requests processed synchronously within each connection
+- WebSocket: Requests processed asynchronously (each in separate goroutine)
+
+### 7. Main Application (tpsg/main.go)
 
 The application entry point supports two modes: normal server mode and test mode.
 
@@ -281,20 +339,21 @@ The application entry point supports two modes: normal server mode and test mode
 13. Retrieves the config object from TConfig
 14. Logs TCP and WS port values from the retrieved config
 
-**TCP Server Startup:**
+**Server Startup:**
 15. Retrieves the config from TConfig
 16. Calls `RunTCPServer(config_r.TCP)` with the TCP port from configuration
-17. Uses `select {}` to keep the program running indefinitely
+17. Calls `RunWSServer(config_r.WS)` with the WebSocket port from configuration
+18. Uses `select {}` to keep the program running indefinitely
 
 This workflow demonstrates:
 - Reading external TOML configuration
 - Reading external JSON user credentials
 - Storing structured data in GKVS
 - Retrieving and using stored configuration values
-- Starting the TCP server with configured port
-- Running the server indefinitely
+- Starting both TCP and WebSocket servers with configured ports
+- Running the servers indefinitely
 
-### 7. Testing System (tpsg/test_gkvs.go)
+### 8. Testing System (tpsg/test_gkvs.go)
 
 The project includes a testing framework for isolated feature testing without running the full server.
 
@@ -336,19 +395,21 @@ Demonstrates and tests concurrent access to the GKVS system:
 
 External packages used:
 - `github.com/BurntSushi/toml` v1.6.0 - TOML parsing
+- `github.com/gorilla/websocket` v1.5.3 - WebSocket protocol implementation
 
 ## Key Design Principles
 
 1. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
 2. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
-3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, server, and testing functionality
-4. **Standardized Logging**: Consistent timestamp format across all log functions
+3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, servers, and testing functionality
+4. **Standardized Logging**: Consistent timestamp format across all log functions - logs appear after critical resources are established
 5. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
 6. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
 7. **Error Handling**: Functions return errors for caller to handle appropriately
-8. **Concurrent Connection Handling**: Each TCP connection runs in its own goroutine
-9. **Non-blocking Server**: TCP server runs in background goroutine
-10. **Testability**: Command-line argument-based test mode for isolated feature testing without dependencies
+8. **Concurrent Connection Handling**: Each TCP and WebSocket connection runs in its own goroutine
+9. **Non-blocking Servers**: Both TCP and WebSocket servers run in background goroutines
+10. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
+11. **Testability**: Command-line argument-based test mode for isolated feature testing without dependencies
 
 ## Current Status
 
@@ -363,21 +424,27 @@ The project has foundational infrastructure in place:
 - ✅ Build and run scripts
 - ✅ Path management for external config files
 - ✅ TCP server with concurrent connection handling
-- ✅ Request/response protocol (currently echo placeholder)
+- ✅ TCP request/response protocol (currently echo placeholder)
+- ✅ WebSocket server with concurrent connection handling
+- ✅ WebSocket asynchronous request processing
+- ✅ WebSocket request/response protocol (currently echo placeholder)
 - ✅ Testing framework with command-line test mode
 - ✅ GKVS concurrent access test
 
 The application is functional and can:
 - Load configuration from external TOML file
 - Load user credentials from external JSON file
-- Start a TCP server on the configured port
+- Start TCP server on the configured port
+- Start WebSocket server on the configured port
 - Accept multiple concurrent TCP connections
-- Process requests and send responses (currently echo mode)
+- Accept multiple concurrent WebSocket connections
+- Process TCP requests synchronously and send responses (currently echo mode)
+- Process WebSocket messages asynchronously and send responses (currently echo mode)
 - Log all events and errors with timestamps
-- Run indefinitely serving TCP clients
+- Run indefinitely serving both TCP and WebSocket clients
 - Run isolated feature tests via command-line arguments
 
 **Next development steps** (as indicated in SPECS.md):
 - Replace `ProcessTCPRequest` placeholder with actual protocol implementation
-- Implement WebSocket server functionality
+- Replace `ProcessWSRequest` placeholder with actual protocol implementation
 - Define and implement request/response protocol specifications
