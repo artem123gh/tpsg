@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-TPSG is a Go-based application that provides TCP and WebSocket server functionality with user authentication and configuration management. The project follows a modular structure with separate concerns for logging, type definitions, configuration management, global storage management, and network communication. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
+TPSG is a Go-based application that provides TCP and WebSocket server functionality with user authentication and configuration management. The project follows Go best practices with a clean package structure, separating the executable entry point from the importable library code. The application uses TOML for application configuration and JSON for user credentials, providing a thread-safe global key-value storage system for runtime data.
 
 ## Project Structure
 
 ```
-tpsg/
+tpsg/ (repository root)
 ├── ai/                          # AI assistant documentation
 │   ├── RULES.md                 # Coding rules (4-space indentation, no commits by AI)
 │   ├── SPECS.md                 # Project specifications
@@ -15,23 +15,31 @@ tpsg/
 │   └── SUMMARY.md               # This file - project summary
 ├── bins/                        # Compiled binaries (tpsg_debug, tpsg_release)
 ├── other/                       # Temporary reference files (not in repo)
-├── tpsg/                        # Go module source code
+├── tpsg/                        # Go module - self-contained project
+│   ├── cmd/
+│   │   └── tpsg/
+│   │       └── main.go          # Application entry point (package main)
 │   ├── go.mod                   # Go module file (module: tpsg, Go 1.24.1)
 │   ├── go.sum                   # Go dependencies checksums
-│   ├── main.go                  # Application entry point with test mode support
-│   ├── logging.go               # Logging functionality
-│   ├── types.go                 # Type definitions
-│   ├── gkvs.go                  # Global Key-Value Storage implementation
-│   ├── config.go                # Configuration management and constants
-│   ├── server_tcp.go            # TCP server implementation
-│   ├── server_ws.go             # WebSocket server implementation
-│   └── test_gkvs.go             # GKVS concurrent access test
+│   ├── logging.go               # Logging functionality (package tpsg)
+│   ├── types.go                 # Type definitions (package tpsg)
+│   ├── gkvs.go                  # Global Key-Value Storage (package tpsg)
+│   ├── gkvs_test.go             # GKVS unit tests (package tpsg)
+│   ├── config.go                # Configuration management (package tpsg)
+│   ├── server_tcp.go            # TCP server implementation (package tpsg)
+│   └── server_ws.go             # WebSocket server implementation (package tpsg)
 ├── build_debug.sh               # Build debug binary
 ├── build_release.sh             # Build release binary (optimized with -ldflags="-s -w")
 ├── run_console_debug.sh         # Run debug binary
-├── run_console_release.sh       # Run release binary
-└── run_test_gkvs.sh             # Run GKVS test
+└── run_console_release.sh       # Run release binary
 ```
+
+**Key Structure Notes:**
+- Repository root (`tpsg/`) contains build scripts, documentation, and bins
+- Go project is self-contained in `tpsg/` subfolder
+- All library code uses `package tpsg` for importability and testability
+- Entry point `cmd/tpsg/main.go` uses `package main` and imports `tpsg`
+- Build scripts reference `./tpsg/cmd/tpsg` as build target
 
 ## External Configuration Files
 
@@ -130,10 +138,13 @@ type GKVS struct {
 
 **Usage Example:**
 ```go
+// From library code (package tpsg)
 TConfig.Set("key", NewGKVSString("value"))
-result := TConfig.Get("key").String  // Direct field access, no dereferencing
-config := TConfig.Get("config").TConfigTOML  // Retrieve config object
-userCreds := TUsers.Get("username1").TUserCreds  // Retrieve user credentials
+result := TConfig.Get("key").String
+
+// From main.go (package main, imports tpsg)
+tpsg.TConfig.Set("key", tpsg.NewGKVSString("value"))
+result := tpsg.TConfig.Get("key").String
 ```
 
 ### 4. Configuration Management (tpsg/config.go)
@@ -304,48 +315,50 @@ Placeholder request processor (currently implements echo server):
 - TCP: Requests processed synchronously within each connection
 - WebSocket: Requests processed asynchronously (each in separate goroutine)
 
-### 7. Main Application (tpsg/main.go)
+### 7. Main Application (tpsg/cmd/tpsg/main.go)
 
-The application entry point supports two modes: normal server mode and test mode.
+The application entry point in `package main` that imports and uses the `tpsg` package.
 
-**Test Mode:**
-- Activated by passing `test-gkvs` as the first command-line argument
-- Calls `TestGKVS()` function and exits without loading configuration or starting the server
-- Allows testing specific features independently of the full application
+**Package Structure:**
+- Located in `tpsg/cmd/tpsg/main.go`
+- Uses `package main` (executable)
+- Imports `"tpsg"` to access library functions
+- All tpsg package symbols accessed via `tpsg.` prefix
 
-**Normal Server Mode - Initialization Sequence:**
+**Initialization Sequence:**
 1. Constructs configuration paths from HOME environment variable
-2. Stores all paths in global `TConfig` GKVS instance:
+2. Stores all paths in global `tpsg.TConfig` GKVS instance:
    - `user_folder` - User's home directory
    - `configs_folder_path` - Path to config folder
    - `config_fullpath` - Full path to config.toml
    - `users_config_fullpath` - Full path to users.json
 
 **TOML Configuration Loading:**
-3. Calls `ReadConfig(config_fullpath)` to read and parse config.toml
-4. Handles errors by logging with `LogError`
+3. Calls `tpsg.ReadConfig(config_fullpath)` to read and parse config.toml
+4. Handles errors by logging with `tpsg.LogError`
 5. On success, stores parsed config in TConfig under key "config"
-6. Logs success event with `LogEvent`
+6. Logs success event with `tpsg.LogEvent`
 
 **User Credentials Loading:**
-7. Calls `ReadUsersConfig(users_config_fullpath)` to read and parse users.json
-8. Handles errors by logging with `LogError`
+7. Calls `tpsg.ReadUsersConfig(users_config_fullpath)` to read and parse users.json
+8. Handles errors by logging with `tpsg.LogError`
 9. On success, each user is stored in TUsers GKVS with username as key
-10. Logs success event with `LogEvent`
+10. Logs success event with `tpsg.LogEvent`
 
 **Demonstration of GKVS Retrieval:**
 11. Retrieves all stored paths from TConfig
-12. Logs path values using `LogInfo`
+12. Logs path values using `tpsg.LogInfo`
 13. Retrieves the config object from TConfig
 14. Logs TCP and WS port values from the retrieved config
 
 **Server Startup:**
 15. Retrieves the config from TConfig
-16. Calls `RunTCPServer(config_r.TCP)` with the TCP port from configuration
-17. Calls `RunWSServer(config_r.WS)` with the WebSocket port from configuration
+16. Calls `tpsg.RunTCPServer(config_r.TCP)` with the TCP port from configuration
+17. Calls `tpsg.RunWSServer(config_r.WS)` with the WebSocket port from configuration
 18. Uses `select {}` to keep the program running indefinitely
 
 This workflow demonstrates:
+- Importing and using the tpsg package from main
 - Reading external TOML configuration
 - Reading external JSON user credentials
 - Storing structured data in GKVS
@@ -353,43 +366,56 @@ This workflow demonstrates:
 - Starting both TCP and WebSocket servers with configured ports
 - Running the servers indefinitely
 
-### 8. Testing System (tpsg/test_gkvs.go)
+### 8. Testing System (tpsg/gkvs_test.go)
 
-The project includes a testing framework for isolated feature testing without running the full server.
+The project uses Go's standard testing framework with comprehensive unit tests.
 
-**TestGKVS Function:**
-```go
-func TestGKVS()
-```
+**Test Functions:**
 
-Demonstrates and tests concurrent access to the GKVS system:
-- Spawns 3 goroutines that interact with `TConfig` at different times
-- **Goroutine 1**: Immediately sets `test1 = 1` (uint16)
-- **Goroutine 2**: Waits 5 seconds, retrieves and prints `test1`, then sets `test1 = 2`
-- **Goroutine 3**: Waits 10 seconds, retrieves and prints `test1`
-- Demonstrates thread-safe concurrent read/write operations
-- Validates mutex-based synchronization prevents race conditions
-- Uses direct field access pattern: `TConfig.Get("test1").UInt16`
-- Runs for ~12 seconds to allow all goroutines to complete
+1. **TestGKVSBasicOperations** - Tests Set, Get, Delete operations and edge cases
+2. **TestGKVSAllTypes** - Tests all 13 supported value types in GKVSTypes
+3. **TestGKVSConcurrentAccess** - Tests thread-safe concurrent read/write operations
+4. **TestGKVSConcurrentStress** - Stress test with 200 concurrent goroutines
+5. **TestGKVSSetOverwrite** - Tests overwriting existing keys with different types
 
 **Test Execution:**
-- Tests are invoked via command-line argument to `main()`
-- Run with: `./run_test_gkvs.sh` or `go run . test-gkvs` (from tpsg/ directory)
-- Test mode bypasses configuration loading and server startup
-- Additional test functions can be added and invoked with different arguments
+```bash
+# From tpsg/ directory (Go project folder)
+cd tpsg
+go test                    # Run all tests
+go test -v                 # Verbose output
+go test -run TestGKVS      # Run specific test pattern
+go test -cover             # Show test coverage
+```
 
 **Design Pattern:**
-- All source files use `package main` (not an importable library)
-- Test functions are part of the main package
-- Command-line arguments switch between server mode and test mode
-- Allows testing specific features in isolation without external dependencies
+- Uses `package tpsg` with standard `testing` package
+- Test files follow Go convention: `*_test.go`
+- Tests use `*testing.T` for assertions and error reporting
+- Validates thread safety with `sync.WaitGroup` for goroutine synchronization
+- No external dependencies required for testing
 
 ## Build System
 
-- **Debug build**: Standard Go build without optimizations
-- **Release build**: Optimized with stripped symbols (`-ldflags="-s -w"`)
-- All build and run scripts are executable bash scripts in project root
-- **Test script**: `run_test_gkvs.sh` - Runs GKVS concurrent access test
+**Build Scripts:**
+- `build_debug.sh` - Builds `./tpsg/cmd/tpsg` to `bins/tpsg_debug` (standard build)
+- `build_release.sh` - Builds with `-ldflags="-s -w"` to `bins/tpsg_release` (optimized, stripped)
+- `run_console_debug.sh` - Executes `bins/tpsg_debug`
+- `run_console_release.sh` - Executes `bins/tpsg_release`
+
+**Build Commands:**
+```bash
+# From repository root
+./build_debug.sh           # Build debug binary
+./build_release.sh         # Build release binary
+./run_console_debug.sh     # Run debug binary
+./run_console_release.sh   # Run release binary
+
+# From tpsg/ directory (Go project folder)
+cd tpsg
+go build ./cmd/tpsg        # Build manually
+go test                    # Run tests
+```
 
 ## Dependencies
 
@@ -399,37 +425,41 @@ External packages used:
 
 ## Key Design Principles
 
-1. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
-2. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
-3. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, servers, and testing functionality
-4. **Standardized Logging**: Consistent timestamp format across all log functions - logs appear after critical resources are established
-5. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
-6. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
-7. **Error Handling**: Functions return errors for caller to handle appropriately
-8. **Concurrent Connection Handling**: Each TCP and WebSocket connection runs in its own goroutine
-9. **Non-blocking Servers**: Both TCP and WebSocket servers run in background goroutines
-10. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
-11. **Testability**: Command-line argument-based test mode for isolated feature testing without dependencies
+1. **Go Best Practices**: Follows standard Go project layout with `cmd/` and library packages
+2. **Package Structure**: Clean separation between executable (`package main`) and library code (`package tpsg`)
+3. **Testability**: Standard Go testing with `go test` support, comprehensive unit tests
+4. **Thread Safety**: GKVS uses RWMutex for safe concurrent access across goroutines
+5. **Clean API**: Direct value types in GKVSTypes avoid pointer complexity
+6. **Separation of Concerns**: Distinct files for logging, types, storage, configuration, and servers
+7. **Standardized Logging**: Consistent timestamp format across all log functions
+8. **Global Accessibility**: TConfig and TUsers are globally available for application-wide access
+9. **External Configuration**: TOML-based config for settings, JSON-based config for user credentials
+10. **Error Handling**: Functions return errors for caller to handle appropriately
+11. **Concurrent Connection Handling**: Each TCP and WebSocket connection runs in its own goroutine
+12. **Non-blocking Servers**: Both TCP and WebSocket servers run in background goroutines
+13. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
 
 ## Current Status
 
-The project has foundational infrastructure in place:
-- ✅ Logging system
-- ✅ Type definitions and tagged union system
-- ✅ Thread-safe global key-value storage
-- ✅ TOML configuration reading and parsing
-- ✅ JSON user credentials reading and parsing
+The project has foundational infrastructure in place following Go best practices:
+- ✅ Proper Go project structure with `cmd/` and library packages
+- ✅ Logging system (package tpsg)
+- ✅ Type definitions and tagged union system (package tpsg)
+- ✅ Thread-safe global key-value storage (package tpsg)
+- ✅ TOML configuration reading and parsing (package tpsg)
+- ✅ JSON user credentials reading and parsing (package tpsg)
 - ✅ Configuration storage in global GKVS
 - ✅ User credentials storage in global GKVS
-- ✅ Build and run scripts
+- ✅ Build and run scripts (updated for new structure)
 - ✅ Path management for external config files
-- ✅ TCP server with concurrent connection handling
+- ✅ TCP server with concurrent connection handling (package tpsg)
 - ✅ TCP request/response protocol (currently echo placeholder)
-- ✅ WebSocket server with concurrent connection handling
+- ✅ WebSocket server with concurrent connection handling (package tpsg)
 - ✅ WebSocket asynchronous request processing
 - ✅ WebSocket request/response protocol (currently echo placeholder)
-- ✅ Testing framework with command-line test mode
-- ✅ GKVS concurrent access test
+- ✅ Standard Go testing framework integration
+- ✅ Comprehensive GKVS unit tests (5 test functions)
+- ✅ Application entry point imports and uses tpsg package
 
 The application is functional and can:
 - Load configuration from external TOML file
@@ -442,7 +472,7 @@ The application is functional and can:
 - Process WebSocket messages asynchronously and send responses (currently echo mode)
 - Log all events and errors with timestamps
 - Run indefinitely serving both TCP and WebSocket clients
-- Run isolated feature tests via command-line arguments
+- Run unit tests with standard `go test` command
 
 **Next development steps** (as indicated in SPECS.md):
 - Replace `ProcessTCPRequest` placeholder with actual protocol implementation
