@@ -85,4 +85,13 @@ GKVSInstance.Delete(key string)
 3. For each WS connection should be spawned another goroutine with function `HandleWSConnection`. Within this function requests should be processed asynchronously until conncetion is closed.
 4. For each request should be spawned separate goroutine within which called function `ProcessWSRequest` which takes request as argument and gives response as result. Then result should be sent back to client. For now you can put placeholder for this function which will decode request as text and then will send back echo response to client.
 5. In `tpsg/main.go` in `func main` in the end of the function WS server should be run wth port WS from TConfig.
- 
+
+## Theplatform serde (serialization/deserialization).
+
+1. Serialization and deserialization between "theplatform" apps and golang apps over TCP and websocket should be implemented.
+2. This feature should be implemented in a separate subpackage `tpserde` located in `tpsg/tpserde/`.
+3. The "theplatform" is a programming language source code of which is written in rust. In source code there are such things like IPC over TCP between "theplatform" apps, serialization and deserialization of data, data types, binary format and so on. Necessary parts of sourse code of "theplatfrom" is temporarily located in `other/theplatform/`, so, you can check it
+4. There should be implemented data types which correspond to "theplatform" data types. Let's call the `TPTypes`.
+5. The serde feature should work like that then over connection port can be sent serialized binary data of "theplatform" data types. If data is received by golang app from "theplatform" app it should be deserialized from "theplatform" binary format to `TPTypes`. If data is sent by golang app to "theplatform" app then data of `TPTypes` should be serialized to "theplatform" binary format and send over the port.
+7. What the usage of serde feature should be. After binary data is received from "theplatform" app over the port binary data should be passed to the function `TPDataDe` to deserialize to `TPTypes` and result data to be returned. Before binary data is sent to "theplatform" `TPTypes` data should be passed to the fucntion `TPDataSer` to serialize them to "theplatform" binary and function return it as result which can be sent over the port. "theplatform" binary type in golang can be called `TPBinary`.
+8. It should be considered possibility to optionally compress and decompress binary data with `lz4` algorithm before sending and after receiving correspondingly. If binary data is received and passed to `TPDataDe` the function should detect if it is compressed with `lz4` then it should decompress it first vefore deserialization to `TPTypes`. If data of `TPTypes` is passed to `TPDataSer` then there should be a flag to compress data with `lz4` or not after serialization to binary.

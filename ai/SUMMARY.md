@@ -19,6 +19,16 @@ tpsg/ (repository root)
 │   ├── cmd/
 │   │   └── tpsg/
 │   │       └── main.go          # Application entry point (package main)
+│   ├── tpserde/          # Theplatform serde (serialization/deserialization)
+│   │   ├── type_constants.go    # Theplatform type constants
+│   │   ├── types.go             # TPTypes - theplatform data types in Go
+│   │   ├── constants.go         # NULL and infinity constants with helpers
+│   │   ├── header.go            # Binary header serialization
+│   │   ├── deserialize.go       # TPDataDe - binary to TPTypes
+│   │   ├── serialize.go         # TPDataSer - TPTypes to binary
+│   │   ├── serde_test.go        # Serialization/deserialization tests
+│   │   ├── constants_test.go    # NULL and infinity values tests
+│   │   └── README.md            # Package documentation
 │   ├── go.mod                   # Go module file (module: tpsg, Go 1.24.1)
 │   ├── go.sum                   # Go dependencies checksums
 │   ├── logging.go               # Logging functionality (package tpsg)
@@ -414,6 +424,95 @@ go test -cover             # Show test coverage
 - Validates thread safety with `sync.WaitGroup` for goroutine synchronization
 - No external dependencies required for testing
 
+### 10. Theplatform Serialization/Deserialization - tpserde (tpsg/tpserde/)
+
+A complete serde (serialization/deserialization) implementation for interoperability with "theplatform" (a Rust-based programming language) over TCP and WebSocket connections.
+
+**Package Structure:**
+
+The `tpserde` package contains:
+- **type_constants.go** - Complete type system constants matching theplatform's 32-bit type layout
+- **types.go** - Go type definitions (TPTypes) corresponding to theplatform data types
+- **header.go** - Binary header serialization/deserialization with feature flags
+- **deserialize.go** - Binary to TPTypes conversion (TPDataDe function)
+- **serialize.go** - TPTypes to binary conversion (TPDataSer function)
+- **serde_test.go** - Comprehensive tests for all type serialization/deserialization
+- **README.md** - Package documentation and usage examples
+
+**Core API:**
+
+```go
+// Serialize TPTypes to binary format (with optional LZ4 compression)
+func TPDataSer(data TPTypes, compress bool) (TPBinary, error)
+
+// Deserialize binary data to TPTypes (auto-detects and decompresses LZ4)
+func TPDataDe(data TPBinary) (TPTypes, error)
+```
+
+**Supported Type Categories:**
+
+1. **Scalar Types**: NIL, ANY, SC_BOOL, SC_BYTE, SC_SHORT, SC_INT, SC_LONG, SC_REAL, SC_FLOAT, SC_ENUM, SC_GUID, SC_SYMBOL
+2. **Temporal Types**: SC_MONTH, SC_DATE, SC_MINUTE, SC_SECOND, SC_TIME, SC_TIMESTAMP, SC_DATETIME, SC_TIMESPAN
+3. **Vector Types**: VEC_BOOL, VEC_BYTE, VEC_SHORT, VEC_INT, VEC_LONG, VEC_REAL, VEC_FLOAT, VEC_GUID, VEC_SYMBOL, VEC_CHAR, plus temporal vectors
+4. **Complex Types**: LIST, DICT, TABLE, PATTERN, LAMBDA, CLOSURE, REAGENT
+
+**Binary Format:**
+
+Matches theplatform's binary format exactly:
+- **Header** (16 bytes): Features (u32) + Reserved (u32) + Length (u64)
+- **Payload**: Type tag (u32) + type-specific data
+- All multi-byte values in little-endian format
+- Optional LZ4 compression for payloads > 4096 bytes
+
+**Features:**
+
+- Complete type coverage matching theplatform's type system
+- Full support for special numeric values (NULL/`0N`, infinity/`W`, negative infinity/`-W`)
+- Helper functions to detect and create special values (IsNullLong, NewTPInfFloat, etc.)
+- Automatic LZ4 compression/decompression
+- Comprehensive test suite (15+ test functions covering all type categories and special values)
+- Clean API with constructor functions for all types
+- Fully compatible with theplatform's Rust implementation
+
+**Usage Example:**
+
+```go
+import "tpsg/tpserde"
+
+// Create data
+data := tpserde.NewTPList([]tpserde.TPTypes{
+    tpserde.NewTPInt(42),
+    tpserde.NewTPVecChar("Hello"),
+})
+
+// Serialize with compression
+binary, err := tpserde.TPDataSer(data, true)
+
+// Deserialize
+result, err := tpserde.TPDataDe(binary)
+```
+
+**Testing:**
+
+Run tests with:
+```bash
+cd tpsg
+go test ./tpserde -v
+```
+
+All tests pass, covering:
+- Scalar type round-trips
+- Vector type round-trips
+- Complex type round-trips (lists, dicts, tables)
+- LZ4 compression/decompression
+- Header serialization
+- GUID handling
+
+**Dependencies:**
+
+- `github.com/google/uuid` v1.6.0 - UUID support
+- `github.com/pierrec/lz4/v4` v4.1.23 - LZ4 compression
+
 ## Build System
 
 **Build Scripts:**
@@ -439,8 +538,10 @@ go test                    # Run tests
 ## Dependencies
 
 External packages used:
-- `github.com/BurntSushi/toml` v1.6.0 - TOML parsing
+- `github.com/BurntSushi/toml` v1.6.0 - TOML parsing for configuration files
 - `github.com/gorilla/websocket` v1.5.3 - WebSocket protocol implementation
+- `github.com/google/uuid` v1.6.0 - UUID support for theplatform GUID types
+- `github.com/pierrec/lz4/v4` v4.1.23 - LZ4 compression for theplatform serde
 
 ## Key Design Principles
 
@@ -457,6 +558,8 @@ External packages used:
 11. **Concurrent Connection Handling**: Each TCP and WebSocket connection runs in its own goroutine
 12. **Non-blocking Servers**: Both TCP and WebSocket servers run in background goroutines
 13. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
+14. **Theplatform Interoperability**: Complete binary format compatibility with theplatform for seamless IPC
+15. **Efficient Compression**: Automatic LZ4 compression for large payloads to minimize network bandwidth
 
 ## Current Status
 
@@ -480,6 +583,13 @@ The project has foundational infrastructure in place following Go best practices
 - ✅ Standard Go testing framework integration
 - ✅ Comprehensive GKVS unit tests (5 test functions)
 - ✅ Application entry point imports and uses tpsg package
+- ✅ Theplatform serde library (tpserde package)
+- ✅ Complete type system matching theplatform's 32-bit type layout
+- ✅ Special numeric values support (NULL/0N, infinity/W, -infinity/-W)
+- ✅ Binary serialization (TPDataSer) with optional LZ4 compression
+- ✅ Binary deserialization (TPDataDe) with automatic LZ4 decompression
+- ✅ Support for all theplatform types (scalars, vectors, complex types)
+- ✅ Comprehensive serde tests (15+ test functions, all passing)
 
 The application is functional and can:
 - Load configuration from external TOML file
@@ -490,11 +600,14 @@ The application is functional and can:
 - Accept multiple concurrent WebSocket connections
 - Process TCP requests synchronously and send responses (currently echo mode)
 - Process WebSocket messages asynchronously and send responses (currently echo mode)
+- Serialize/deserialize theplatform data types for IPC
+- Automatically compress/decompress large data payloads with LZ4
 - Log all events and errors with timestamps
 - Run indefinitely serving both TCP and WebSocket clients
 - Run unit tests with standard `go test` command
 
-**Next development steps** (as indicated in SPECS.md):
-- Replace `ProcessTCPRequest` placeholder with actual protocol implementation
-- Replace `ProcessWSRequest` placeholder with actual protocol implementation
-- Define and implement request/response protocol specifications
+**Next development steps**:
+- Integrate tpserde into TCP and WebSocket servers
+- Replace `ProcessTCPRequest` placeholder with theplatform protocol implementation
+- Replace `ProcessWSRequest` placeholder with theplatform protocol implementation
+- Define and implement request/response protocol specifications using TPTypes
