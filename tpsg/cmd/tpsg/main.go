@@ -46,11 +46,19 @@ func main() {
     tpsg.LogInfo(fmt.Sprintf("Config TCP: %d", config_r.TCP))
     tpsg.LogInfo(fmt.Sprintf("Config WS: %d", config_r.WS))
 
-    // Run TCP server
-    tpsg.RunTCPServer(config_r.TCP)
+    // Check for testseqs command line argument
+    if len(os.Args) > 1 && os.Args[1] == "testseqs" {
+        // Run test sequences
+        tpsg.LogEvent("Running test sequences...")
+        tpsg.TestSeqs()
+    } else {
+        // Normal workflow
+        // Run TCP server
+        tpsg.RunTCPServer(config_r.TCP)
 
-    // Run WebSocket server
-    tpsg.RunWSServer(config_r.WS)
+        // Run WebSocket server
+        tpsg.RunWSServer(config_r.WS)
+    }
 
     // Keep the program running
     select {}

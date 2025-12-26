@@ -19,7 +19,7 @@ tpsg/ (repository root)
 │   ├── cmd/
 │   │   └── tpsg/
 │   │       └── main.go          # Application entry point (package main)
-│   ├── tpserde/          # Theplatform serde (serialization/deserialization)
+│   ├── tpserde/                 # Theplatform serde (serialization/deserialization)
 │   │   ├── type_constants.go    # Theplatform type constants
 │   │   ├── types.go             # TPTypes - theplatform data types in Go
 │   │   ├── constants.go         # NULL and infinity constants with helpers
@@ -38,11 +38,13 @@ tpsg/ (repository root)
 │   ├── gkvs_test.go             # GKVS unit tests (package tpsg)
 │   ├── config.go                # Configuration management (package tpsg)
 │   ├── server_tcp.go            # TCP server implementation (package tpsg)
-│   └── server_ws.go             # WebSocket server implementation (package tpsg)
+│   ├── server_ws.go             # WebSocket server implementation (package tpsg)
+│   └── testseqs.go              # Test sequences (package tpsg)
 ├── build_debug.sh               # Build debug binary
 ├── build_release.sh             # Build release binary (optimized with -ldflags="-s -w")
 ├── run_console_debug.sh         # Run debug binary
-└── run_console_release.sh       # Run release binary
+├── run_console_release.sh       # Run release binary
+└── run_testseqs.sh              # Run debug binary with testseqs argument
 ```
 
 **Key Structure Notes:**
@@ -287,7 +289,24 @@ Placeholder request processor (currently implements echo server):
 - Connection remains open for multiple requests
 - Connection closes on client disconnect or error
 
-### 7. WebSocket Server (tpsg/server_ws.go)
+### 7. Test Sequences (tpsg/testseqs.go)
+
+A dedicated module for test sequences to validate functionality during development without interfering with normal application workflow.
+
+**TestSeqs Function:**
+```go
+func TestSeqs()
+```
+
+Contains test sequences for various features:
+- **TCP Client Connection Test**: Connects to 127.0.0.1:17001, creates a test string, serializes it using tpserde, and sends the binary data over the connection
+- Logs all test activities and errors
+- Demonstrates integration of tpserde serialization with network communication
+
+**Usage:**
+Test sequences are executed when the application is run with the `testseqs` command line argument. This provides a clean separation between testing and production workflows.
+
+### 8. WebSocket Server (tpsg/server_ws.go)
 
 The WebSocket server provides bidirectional real-time communication functionality with concurrent connection handling and asynchronous request processing.
 
@@ -344,7 +363,7 @@ Placeholder request processor (currently implements echo server):
 - TCP: Requests processed synchronously within each connection
 - WebSocket: Requests processed asynchronously (each in separate goroutine)
 
-### 8. Main Application (tpsg/cmd/tpsg/main.go)
+### 9. Main Application (tpsg/cmd/tpsg/main.go)
 
 The application entry point in `package main` that imports and uses the `tpsg` package.
 
@@ -380,11 +399,19 @@ The application entry point in `package main` that imports and uses the `tpsg` p
 13. Retrieves the config object from TConfig
 14. Logs TCP and WS port values from the retrieved config
 
-**Server Startup:**
-15. Retrieves the config from TConfig
-16. Calls `tpsg.RunTCPServer(config_r.TCP)` with the TCP port from configuration
-17. Calls `tpsg.RunWSServer(config_r.WS)` with the WebSocket port from configuration
+**Execution Mode Selection:**
+15. Checks command line arguments for `testseqs` flag
+16. If `testseqs` argument is present:
+    - Calls `tpsg.TestSeqs()` to run test sequences
+    - Logs the test sequences execution
+17. Otherwise (normal workflow):
+    - Calls `tpsg.RunTCPServer(config_r.TCP)` with the TCP port from configuration
+    - Calls `tpsg.RunWSServer(config_r.WS)` with the WebSocket port from configuration
 18. Uses `select {}` to keep the program running indefinitely
+
+**Command Line Arguments:**
+- No arguments: Normal operation - starts TCP and WebSocket servers
+- `testseqs`: Test mode - executes test sequences from `tpsg.TestSeqs()`
 
 This workflow demonstrates:
 - Importing and using the tpsg package from main
@@ -392,10 +419,12 @@ This workflow demonstrates:
 - Reading external JSON user credentials
 - Storing structured data in GKVS
 - Retrieving and using stored configuration values
-- Starting both TCP and WebSocket servers with configured ports
-- Running the servers indefinitely
+- Command line argument handling for different execution modes
+- Starting both TCP and WebSocket servers (normal mode)
+- Running test sequences (test mode)
+- Running the application indefinitely
 
-### 9. Testing System (tpsg/gkvs_test.go)
+### 10. Testing System (tpsg/gkvs_test.go)
 
 The project uses Go's standard testing framework with comprehensive unit tests.
 
@@ -424,7 +453,7 @@ go test -cover             # Show test coverage
 - Validates thread safety with `sync.WaitGroup` for goroutine synchronization
 - No external dependencies required for testing
 
-### 10. Theplatform Serialization/Deserialization - tpserde (tpsg/tpserde/)
+### 11. Theplatform Serialization/Deserialization - tpserde (tpsg/tpserde/)
 
 A complete serde (serialization/deserialization) implementation for interoperability with "theplatform" (a Rust-based programming language) over TCP and WebSocket connections.
 
@@ -518,16 +547,18 @@ All tests pass, covering:
 **Build Scripts:**
 - `build_debug.sh` - Builds `./tpsg/cmd/tpsg` to `bins/tpsg_debug` (standard build)
 - `build_release.sh` - Builds with `-ldflags="-s -w"` to `bins/tpsg_release` (optimized, stripped)
-- `run_console_debug.sh` - Executes `bins/tpsg_debug`
-- `run_console_release.sh` - Executes `bins/tpsg_release`
+- `run_console_debug.sh` - Executes `bins/tpsg_debug` (normal mode)
+- `run_console_release.sh` - Executes `bins/tpsg_release` (normal mode)
+- `run_testseqs.sh` - Executes `bins/tpsg_debug testseqs` (test sequences mode)
 
 **Build Commands:**
 ```bash
 # From repository root
 ./build_debug.sh           # Build debug binary
 ./build_release.sh         # Build release binary
-./run_console_debug.sh     # Run debug binary
-./run_console_release.sh   # Run release binary
+./run_console_debug.sh     # Run debug binary (normal mode)
+./run_console_release.sh   # Run release binary (normal mode)
+./run_testseqs.sh          # Run test sequences mode
 
 # From tpsg/ directory (Go project folder)
 cd tpsg
@@ -560,6 +591,7 @@ External packages used:
 13. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
 14. **Theplatform Interoperability**: Complete binary format compatibility with theplatform for seamless IPC
 15. **Efficient Compression**: Automatic LZ4 compression for large payloads to minimize network bandwidth
+16. **Test Sequences Support**: Dedicated test sequences module with command line argument support for testing functionality without interfering with normal operation
 
 ## Current Status
 
@@ -590,18 +622,23 @@ The project has foundational infrastructure in place following Go best practices
 - ✅ Binary deserialization (TPDataDe) with automatic LZ4 decompression
 - ✅ Support for all theplatform types (scalars, vectors, complex types)
 - ✅ Comprehensive serde tests (15+ test functions, all passing)
+- ✅ Test sequences module (testseqs.go)
+- ✅ Command line argument support for test sequences mode
+- ✅ Test sequences script (run_testseqs.sh)
 
 The application is functional and can:
 - Load configuration from external TOML file
 - Load user credentials from external JSON file
-- Start TCP server on the configured port
-- Start WebSocket server on the configured port
+- Start TCP server on the configured port (normal mode)
+- Start WebSocket server on the configured port (normal mode)
+- Run test sequences when invoked with `testseqs` argument (test mode)
 - Accept multiple concurrent TCP connections
 - Accept multiple concurrent WebSocket connections
 - Process TCP requests synchronously and send responses (currently echo mode)
 - Process WebSocket messages asynchronously and send responses (currently echo mode)
 - Serialize/deserialize theplatform data types for IPC
 - Automatically compress/decompress large data payloads with LZ4
+- Test TCP client connections with serialized data (test sequences)
 - Log all events and errors with timestamps
 - Run indefinitely serving both TCP and WebSocket clients
 - Run unit tests with standard `go test` command
