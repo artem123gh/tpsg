@@ -24,10 +24,12 @@ tpsg/ (repository root)
 │   │   ├── types.go             # TPTypes - theplatform data types in Go
 │   │   ├── constants.go         # NULL and infinity constants with helpers
 │   │   ├── header.go            # Binary header serialization
+│   │   ├── handshake.go         # IPC protocol handshake
 │   │   ├── deserialize.go       # TPDataDe - binary to TPTypes
 │   │   ├── serialize.go         # TPDataSer - TPTypes to binary
 │   │   ├── serde_test.go        # Serialization/deserialization tests
 │   │   ├── constants_test.go    # NULL and infinity values tests
+│   │   ├── handshake_test.go    # Handshake tests
 │   │   └── README.md            # Package documentation
 │   ├── go.mod                   # Go module file (module: tpsg, Go 1.24.1)
 │   ├── go.sum                   # Go dependencies checksums
@@ -299,9 +301,13 @@ func TestSeqs()
 ```
 
 Contains test sequences for various features:
-- **TCP Client Connection Test**: Connects to 127.0.0.1:17001, creates a test string, serializes it using tpserde, and sends the binary data over the connection
-- Logs all test activities and errors
-- Demonstrates integration of tpserde serialization with network communication
+- **TCP Client Connection Test with IPC Protocol**:
+  - Connects to 127.0.0.1:17001
+  - Performs IPC handshake with buffered features
+  - Creates a test string and serializes it using tpserde with LZ4 compression
+  - Sends the binary data over the connection
+  - Logs all test activities including handshake completion and errors
+  - Demonstrates complete IPC protocol flow (handshake + data exchange)
 
 **Usage:**
 Test sequences are executed when the application is run with the `testseqs` command line argument. This provides a clean separation between testing and production workflows.
@@ -462,10 +468,14 @@ A complete serde (serialization/deserialization) implementation for interoperabi
 The `tpserde` package contains:
 - **type_constants.go** - Complete type system constants matching theplatform's 32-bit type layout
 - **types.go** - Go type definitions (TPTypes) corresponding to theplatform data types
+- **constants.go** - NULL and infinity constants with helper functions
 - **header.go** - Binary header serialization/deserialization with feature flags
+- **handshake.go** - IPC protocol handshake implementation
 - **deserialize.go** - Binary to TPTypes conversion (TPDataDe function)
 - **serialize.go** - TPTypes to binary conversion (TPDataSer function)
 - **serde_test.go** - Comprehensive tests for all type serialization/deserialization
+- **constants_test.go** - Tests for NULL and infinity values
+- **handshake_test.go** - Tests for handshake serialization and exchange
 - **README.md** - Package documentation and usage examples
 
 **Core API:**
@@ -476,6 +486,12 @@ func TPDataSer(data TPTypes, compress bool) (TPBinary, error)
 
 // Deserialize binary data to TPTypes (auto-detects and decompresses LZ4)
 func TPDataDe(data TPBinary) (TPTypes, error)
+
+// IPC protocol handshake - Client side (active)
+func ExchangeHandshake(stream io.ReadWriter, features Features) (Handshake, error)
+
+// IPC protocol handshake - Server side (passive)
+func ResponseHandshake(stream io.ReadWriter, features Features) (Handshake, error)
 ```
 
 **Supported Type Categories:**
@@ -485,13 +501,19 @@ func TPDataDe(data TPBinary) (TPTypes, error)
 3. **Vector Types**: VEC_BOOL, VEC_BYTE, VEC_SHORT, VEC_INT, VEC_LONG, VEC_REAL, VEC_FLOAT, VEC_GUID, VEC_SYMBOL, VEC_CHAR, plus temporal vectors
 4. **Complex Types**: LIST, DICT, TABLE, PATTERN, LAMBDA, CLOSURE, REAGENT
 
-**Binary Format:**
+**IPC Protocol:**
 
-Matches theplatform's binary format exactly:
-- **Header** (16 bytes): Features (u32) + Reserved (u32) + Length (u64)
-- **Payload**: Type tag (u32) + type-specific data
-- All multi-byte values in little-endian format
-- Optional LZ4 compression for payloads > 4096 bytes
+The full IPC protocol with theplatform consists of:
+1. **Handshake** (8 bytes): Version (u32) + Features (u32)
+   - Must be exchanged before any data transfer
+   - Client sends handshake, server responds with handshake
+   - Version 0.1.0 encoded as: 0 << 20 | 1 << 10 | 0 = 1024
+   - Features include: compressed, buffered, unsupported flags
+2. **Data Messages** (repeated):
+   - **Header** (16 bytes): Features (u32) + Reserved (u32) + Length (u64)
+   - **Payload**: Type tag (u32) + type-specific data
+   - All multi-byte values in little-endian format
+   - Optional LZ4 compression for payloads > 4096 bytes
 
 **Features:**
 
@@ -499,7 +521,9 @@ Matches theplatform's binary format exactly:
 - Full support for special numeric values (NULL/`0N`, infinity/`W`, negative infinity/`-W`)
 - Helper functions to detect and create special values (IsNullLong, NewTPInfFloat, etc.)
 - Automatic LZ4 compression/decompression
-- Comprehensive test suite (15+ test functions covering all type categories and special values)
+- **IPC protocol handshake** implementation for connection initialization
+- Feature negotiation (compressed, buffered modes)
+- Comprehensive test suite (20+ test functions covering all type categories, special values, and handshake)
 - Clean API with constructor functions for all types
 - Fully compatible with theplatform's Rust implementation
 
@@ -508,7 +532,12 @@ Matches theplatform's binary format exactly:
 ```go
 import "tpsg/tpserde"
 
-// Create data
+// IPC connection with handshake (client side)
+conn, _ := net.Dial("tcp", "127.0.0.1:8080")
+features := tpserde.NewFeatures().WithBuffered()
+handshake, err := tpserde.ExchangeHandshake(conn, features)
+
+// Create and send data
 data := tpserde.NewTPList([]tpserde.TPTypes{
     tpserde.NewTPInt(42),
     tpserde.NewTPVecChar("Hello"),
@@ -516,9 +545,12 @@ data := tpserde.NewTPList([]tpserde.TPTypes{
 
 // Serialize with compression
 binary, err := tpserde.TPDataSer(data, true)
+conn.Write(binary)
 
-// Deserialize
-result, err := tpserde.TPDataDe(binary)
+// Receive and deserialize
+buffer := make([]byte, 65536)
+n, _ := conn.Read(buffer)
+result, err := tpserde.TPDataDe(tpserde.TPBinary(buffer[:n]))
 ```
 
 **Testing:**
@@ -535,6 +567,10 @@ All tests pass, covering:
 - Complex type round-trips (lists, dicts, tables)
 - LZ4 compression/decompression
 - Header serialization
+- **Handshake serialization/deserialization**
+- **Handshake exchange protocol (client/server)**
+- **Feature flags and version encoding**
+- NULL and infinity values
 - GUID handling
 
 **Dependencies:**
@@ -590,8 +626,9 @@ External packages used:
 12. **Non-blocking Servers**: Both TCP and WebSocket servers run in background goroutines
 13. **Asynchronous Request Processing**: WebSocket requests processed asynchronously (each in separate goroutine)
 14. **Theplatform Interoperability**: Complete binary format compatibility with theplatform for seamless IPC
-15. **Efficient Compression**: Automatic LZ4 compression for large payloads to minimize network bandwidth
-16. **Test Sequences Support**: Dedicated test sequences module with command line argument support for testing functionality without interfering with normal operation
+15. **IPC Protocol Support**: Full implementation of theplatform's IPC protocol including handshake exchange and feature negotiation
+16. **Efficient Compression**: Automatic LZ4 compression for large payloads to minimize network bandwidth
+17. **Test Sequences Support**: Dedicated test sequences module with command line argument support for testing functionality without interfering with normal operation
 
 ## Current Status
 
@@ -621,8 +658,11 @@ The project has foundational infrastructure in place following Go best practices
 - ✅ Binary serialization (TPDataSer) with optional LZ4 compression
 - ✅ Binary deserialization (TPDataDe) with automatic LZ4 decompression
 - ✅ Support for all theplatform types (scalars, vectors, complex types)
-- ✅ Comprehensive serde tests (15+ test functions, all passing)
-- ✅ Test sequences module (testseqs.go)
+- ✅ **IPC protocol handshake implementation**
+- ✅ **ExchangeHandshake and ResponseHandshake helper functions**
+- ✅ **Feature negotiation (compressed, buffered, unsupported flags)**
+- ✅ Comprehensive serde tests (20+ test functions, all passing)
+- ✅ Test sequences module (testseqs.go) with IPC handshake demonstration
 - ✅ Command line argument support for test sequences mode
 - ✅ Test sequences script (run_testseqs.sh)
 
@@ -637,14 +677,19 @@ The application is functional and can:
 - Process TCP requests synchronously and send responses (currently echo mode)
 - Process WebSocket messages asynchronously and send responses (currently echo mode)
 - Serialize/deserialize theplatform data types for IPC
+- **Perform IPC protocol handshake (client and server side)**
+- **Negotiate features (compression, buffering) during handshake**
 - Automatically compress/decompress large data payloads with LZ4
-- Test TCP client connections with serialized data (test sequences)
+- Test TCP client connections with full IPC protocol (handshake + data) in test sequences
 - Log all events and errors with timestamps
 - Run indefinitely serving both TCP and WebSocket clients
 - Run unit tests with standard `go test` command
 
 **Next development steps**:
-- Integrate tpserde into TCP and WebSocket servers
-- Replace `ProcessTCPRequest` placeholder with theplatform protocol implementation
-- Replace `ProcessWSRequest` placeholder with theplatform protocol implementation
+- Integrate tpserde with handshake into TCP server (perform handshake on connection, then handle data messages)
+- Integrate tpserde with handshake into WebSocket server (perform handshake on connection, then handle data messages)
+- Replace `ProcessTCPRequest` placeholder with theplatform protocol implementation using TPTypes
+- Replace `ProcessWSRequest` placeholder with theplatform protocol implementation using TPTypes
+- Implement proper message framing/buffering for reading complete messages from TCP connections
 - Define and implement request/response protocol specifications using TPTypes
+- Add authentication and authorization using TUsers GKVS

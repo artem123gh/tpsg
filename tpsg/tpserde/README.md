@@ -55,6 +55,42 @@ Returns:
 - `TPTypes`: The deserialized value
 - `error`: Error if deserialization fails
 
+#### Handshake Functions
+
+For IPC protocol compatibility with theplatform, perform a handshake before data exchange.
+
+**ExchangeHandshake** - Client side (active side) handshake:
+
+```go
+func ExchangeHandshake(stream io.ReadWriter, features Features) (Handshake, error)
+```
+
+Parameters:
+- `stream`: The network connection (e.g., net.Conn)
+- `features`: Requested features (e.g., `NewFeatures().WithBuffered()`)
+
+Returns:
+- `Handshake`: The server's handshake response
+- `error`: Error if handshake fails
+
+**ResponseHandshake** - Server side (passive side) handshake:
+
+```go
+func ResponseHandshake(stream io.ReadWriter, features Features) (Handshake, error)
+```
+
+Parameters:
+- `stream`: The network connection (e.g., net.Conn)
+- `features`: Supported features (e.g., `NewFeatures().WithBuffered()`)
+
+Returns:
+- `Handshake`: The client's handshake request
+- `error`: Error if handshake fails
+
+**Handshake Structure:**
+- `Version`: IPC protocol version (currently 0.1.0)
+- `Features`: Feature flags (compressed, buffered, etc.)
+
 ## Usage Examples
 
 ### Scalar Types
@@ -154,7 +190,65 @@ tableValues := tpserde.NewTPList([]tpserde.TPTypes{
 table := tpserde.NewTPTable(tableKeys, tableValues)
 ```
 
-### With Network I/O
+### IPC Protocol with Handshake
+
+When communicating with theplatform using the IPC protocol, you must perform a handshake before exchanging data:
+
+```go
+import (
+    "net"
+    "tpsg/tpserde"
+)
+
+// Client side (active side)
+func clientExample() {
+    // Connect to server
+    conn, err := net.Dial("tcp", "127.0.0.1:8080")
+    if err != nil {
+        // handle error
+    }
+    defer conn.Close()
+
+    // Perform handshake as active side (client)
+    features := tpserde.NewFeatures().WithBuffered()
+    handshake, err := tpserde.ExchangeHandshake(conn, features)
+    if err != nil {
+        // handle error
+    }
+
+    // Check server features
+    if handshake.Features.IsBuffered() {
+        // Server supports buffered mode
+    }
+
+    // Now exchange data
+    data := tpserde.NewTPVecChar("Hello, theplatform!")
+    binary, _ := tpserde.TPDataSer(data, true)
+    conn.Write(binary)
+}
+
+// Server side (passive side)
+func serverExample(conn net.Conn) {
+    defer conn.Close()
+
+    // Perform handshake as passive side (server)
+    features := tpserde.NewFeatures().WithBuffered()
+    handshake, err := tpserde.ResponseHandshake(conn, features)
+    if err != nil {
+        // handle error
+    }
+
+    // Check client features
+    if handshake.Features.IsBuffered() {
+        // Client supports buffered mode
+    }
+
+    // Now receive and process data
+    // (implement your data reading logic here)
+}
+```
+
+### With Network I/O (Simple Example)
 
 ```go
 import (

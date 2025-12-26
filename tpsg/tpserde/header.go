@@ -35,6 +35,11 @@ func (f Features) WithBuffered() Features {
     return f
 }
 
+func (f Features) WithUnsupported() Features {
+    f.flags |= FEATURE_UNSUPPORTED
+    return f
+}
+
 func (f Features) IsCompressed() bool {
     return (f.flags & FEATURE_COMPRESSED) == FEATURE_COMPRESSED
 }
